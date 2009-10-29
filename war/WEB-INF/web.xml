@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xmlns="http://java.sun.com/xml/ns/javaee"
+xmlns:web="http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
+http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" version="2.5">	
+	<servlet>
+    <servlet-name>Css</servlet-name>
+    <servlet-class>com.google.reducisaurus.servlets.CssServlet</servlet-class>
+  </servlet>	
+  <servlet-mapping>
+    <servlet-name>Css</servlet-name>
+    <url-pattern>/css</url-pattern>
+  </servlet-mapping>
+  
+	<servlet>
+		<servlet-name>Js</servlet-name>
+		<servlet-class>com.google.reducisaurus.servlets.JsServlet</servlet-class>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>Js</servlet-name>
+		<url-pattern>/js</url-pattern>
+	</servlet-mapping>
+
+	<welcome-file-list>
+		<welcome-file>index.html</welcome-file>
+	</welcome-file-list>
+</web-app>

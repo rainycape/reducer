@@ -1,0 +1,11 @@
+syntax: glob
+*.ipr
+*.iws
+*.iml
+.checkstyle
+.externalToolBuilders
+.project
+.settings
+.classpath
+*.class
+war/WEB-INF/classes/*
