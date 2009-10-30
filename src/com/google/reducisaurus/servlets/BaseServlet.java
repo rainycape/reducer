@@ -43,6 +43,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 public abstract class BaseServlet extends HttpServlet {
+  private static final String EXPIRE_URLS_PARAM = "expire_urls";
   private static final String CONTENT_TYPE_ERROR = "text/plain";
   private static final int STATUS_CODE_ERROR = 400;
   private static final int DISABLE_URL_CACHE_VALUE = 0;
@@ -110,46 +111,57 @@ public abstract class BaseServlet extends HttpServlet {
 
   private String collectFromFormArgs(final HttpServletRequest req)
       throws IOException, ServletException {
-    StringBuilder concatenatedContents = new StringBuilder();
+    StringBuilder collector = new StringBuilder();
 
     for (String urlParameterName : getSortedParameterNames(req)) {
-      if (urlParameterName.startsWith("file")) {
-        final String[] values = req.getParameterValues(urlParameterName);
-        for (String value : values) {
-          concatenatedContents.append(value);
-          concatenatedContents.append("\n");
-        }
-      } else if (urlParameterName.startsWith("url")) {
-        final String[] values = req.getParameterValues(urlParameterName);
-        for (final String url : values) {
-          logger.severe("fetching url " + url);
-          try {
-            final String cached = maybeFetchUrlFromCache(req, url);
-
-            if (cached != null) {
-              concatenatedContents.append(cached);
-            } else {
-              final String urlContents = fetchUrl(url);
-              concatenatedContents.append(urlContents);
-              concatenatedContents.append("\n");
-
-              maybePutUrlInCache(req, url, urlContents);
-            }
-          } catch (MalformedURLException ex) {
-            throw new ServletException(ex);
-          }
+      final String[] values = req.getParameterValues(urlParameterName);
+      for (String value : values) {
+        if (value.matches("^https?://.*")) {
+          acquireFromRemoteUrl(req, collector, value);
+        } else {
+          acquireFromParameterValue(collector, value);
         }
       }
     }
-    return concatenatedContents.toString();
+    return collector.toString();
+  }
+
+  private void acquireFromRemoteUrl(final HttpServletRequest req,
+      StringBuilder concatenatedContents, final String url) throws IOException,
+      ServletException {
+    logger.severe("fetching url " + url);
+    try {
+      final String cached = maybeFetchUrlFromCache(req, url);
+
+      if (cached != null) {
+        concatenatedContents.append(cached);
+      } else {
+        final String urlContents = fetchUrl(url);
+        acquireFromParameterValue(concatenatedContents, urlContents);
+
+        maybePutUrlInCache(req, url, urlContents);
+      }
+    } catch (MalformedURLException ex) {
+      throw new ServletException(ex);
+    }
+  }
+
+  private void acquireFromParameterValue(StringBuilder concatenatedContents,
+      String value) {
+    concatenatedContents.append(value);
+    concatenatedContents.append("\n");
   }
 
   private String[] getSortedParameterNames(HttpServletRequest req) {
-    // We want a deterministic order so that dependencies can span input files. We
-    // don't trust the servlet container to return query parameters in any order,
+    // We want a deterministic order so that dependencies can span input files.
+    // We
+    // don't trust the servlet container to return query parameters in any
+    // order,
     // so we impose our own ordering. In this case, we use natural String
     // ordering.
     ArrayList<String> list = Collections.list(req.getParameterNames());
+    // Some parameter names are special.
+    list.remove(EXPIRE_URLS_PARAM);
     String[] arr = list.toArray(new String[] {});
     Arrays.sort(arr);
     return arr;
@@ -171,7 +183,7 @@ public abstract class BaseServlet extends HttpServlet {
   private int getUrlCachingPolicy(final HttpServletRequest req) {
     int cache_policy = DEFAULT_URL_CACHE_TIME_SECS;
 
-    final String v = req.getParameter("expire_urls");
+    final String v = req.getParameter(EXPIRE_URLS_PARAM);
     if (v != null) {
       try {
         int seconds = Integer.parseInt(v);
