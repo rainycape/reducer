@@ -1,4 +1,5 @@
 syntax: glob
+.idea
 *.ipr
 *.iws
 *.iml
@@ -7,5 +8,7 @@ syntax: glob
 .project
 .settings
 .classpath
+out
 *.class
+war/WEB-INF/classes
 war/WEB-INF/classes/*
