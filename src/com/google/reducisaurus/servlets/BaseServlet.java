@@ -67,6 +67,7 @@ public abstract class BaseServlet extends HttpServlet {
                          final HttpServletResponse resp)
       throws ServletException, IOException {
     String filecontents;
+    boolean useMemcache = isMemcacheAllowed(req);
 
     if (ServletFileUpload.isMultipartContent(req)) {
       filecontents = collectFromFileUpload(req);
@@ -85,7 +86,9 @@ public abstract class BaseServlet extends HttpServlet {
     final String key = getKeyForContents(filecontents);
 
     Object cachedCopy;
-    if ((cachedCopy = memcache.get(key)) != null) {
+
+    if (useMemcache && (cachedCopy = memcache.get(key)) !=
+        null) {
       maybeSetHttpCacheHeaders(req, resp);
       render(resp, (String) cachedCopy);
     } else {
@@ -93,10 +96,37 @@ public abstract class BaseServlet extends HttpServlet {
       Response results = process(resp, reader);
       if (results.isCacheable()) {
         maybeSetHttpCacheHeaders(req, resp);
-        memcache.put(key, results.getBody());
+        if (useMemcache) {
+          memcache.put(key, results.getBody());
+        }
       }
       render(resp, results.getBody());
     }
+  }
+
+  private boolean isMemcacheAllowed(HttpServletRequest hreq) {
+    // If there are any caching related headers, don't use any server side
+    // caches.  This isn't built to HTTP spec, but it covers the
+    // shift-reload case.
+    String cacheControl = hreq.getHeader("Cache-Control");
+    if (cacheControl != null && (cacheControl.contains("max-age") ||
+        cacheControl.contains("no-cache"))) {
+      return false;
+    }
+    String pragma = hreq.getHeader("Pragma");
+    if (pragma != null && pragma.contains("no-cache")) {
+      return false;
+    }
+    try {
+      long ims = hreq.getDateHeader("If-Modified-Since");
+      if (ims != -1) {
+        return false;
+      }
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
+
+    return true;
   }
 
   private void maybeSetHttpCacheHeaders(HttpServletRequest req,
@@ -181,7 +211,7 @@ public abstract class BaseServlet extends HttpServlet {
     // order, so we impose our own ordering. In this case, we use natural String
     // ordering.
     List<String> list = Lists.newArrayList(Iterators.forEnumeration(
-        (Enumeration<String>)req.getParameterNames()));
+        (Enumeration<String>) req.getParameterNames()));
     // Some parameter names should be ignored.
     Iterable<String> filtered = Collections2.filter(list,
         new Predicate<String>() {
@@ -233,9 +263,7 @@ public abstract class BaseServlet extends HttpServlet {
 
   private void maybePutUrlInCache(final HttpServletRequest req,
                                   final String url, final String contents) {
-    int cacheForSecs = getCachingPolicy(req, EXPIRE_URLS_PARAM,
-        DISABLE_URL_CACHE_VALUE,
-        DEFAULT_URL_CACHE_TIME_SECS);
+    int cacheForSecs = getUrlCachePolicyFromParams(req);
 
     if (cacheForSecs == DISABLE_URL_CACHE_VALUE) {
       return;
@@ -244,11 +272,19 @@ public abstract class BaseServlet extends HttpServlet {
     memcache.put(url, contents, Expiration.byDeltaSeconds(cacheForSecs));
   }
 
+  private int getUrlCachePolicyFromParams(HttpServletRequest req) {
+    return getCachingPolicy(req, EXPIRE_URLS_PARAM,
+        DISABLE_URL_CACHE_VALUE,
+        DEFAULT_URL_CACHE_TIME_SECS);
+  }
+
   private String maybeFetchUrlFromCache(final HttpServletRequest req,
                                         final String url) {
-    if (getCachingPolicy(req, EXPIRE_URLS_PARAM, DISABLE_URL_CACHE_VALUE,
-        DEFAULT_URL_CACHE_TIME_SECS) ==
-        DISABLE_URL_CACHE_VALUE) {
+    // If the client asks us to not cache, we also delete any cached values for
+    // this key.
+    if (getUrlCachePolicyFromParams(req) == DISABLE_URL_CACHE_VALUE ||
+        !isMemcacheAllowed(req)) {
+      memcache.delete(url);
       return null;
     }
 
