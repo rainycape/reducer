@@ -18,12 +18,18 @@ package com.google.reducisaurus.servlets;
 import com.google.appengine.api.memcache.Expiration;
 import com.google.appengine.api.memcache.MemcacheService;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
+import com.google.common.base.Predicate;
+import com.google.common.collect.Collections2;
+import com.google.common.collect.Iterators;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Ordering;
 import org.apache.commons.fileupload.FileItemIterator;
 import org.apache.commons.fileupload.FileItemStream;
 import org.apache.commons.fileupload.FileUploadException;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
 import org.apache.commons.io.IOUtils;
 
+import javax.annotation.Nullable;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -35,10 +41,10 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.Collection;
 import java.util.Date;
+import java.util.Enumeration;
+import java.util.List;
 import java.util.logging.Logger;
 
 public abstract class BaseServlet extends HttpServlet {
@@ -169,18 +175,22 @@ public abstract class BaseServlet extends HttpServlet {
     concatenatedContents.append("\n");
   }
 
-  private String[] getSortedParameterNames(HttpServletRequest req) {
+  private Collection<String> getSortedParameterNames(HttpServletRequest req) {
     // We want a deterministic order so that dependencies can span input files.
     // We don't trust the servlet container to return query parameters in any
     // order, so we impose our own ordering. In this case, we use natural String
     // ordering.
-    ArrayList<String> list = Collections.list(req.getParameterNames());
-    // Some parameter names are special.
-    list.remove(EXPIRE_URLS_PARAM);
-    list.remove(MAX_AGE_PARAM);
-    String[] arr = list.toArray(new String[]{});
-    Arrays.sort(arr);
-    return arr;
+    List<String> list = Lists.newArrayList(Iterators.forEnumeration(
+        (Enumeration<String>)req.getParameterNames()));
+    // Some parameter names should be ignored.
+    Iterable<String> filtered = Collections2.filter(list,
+        new Predicate<String>() {
+          @Override
+          public boolean apply(@Nullable String s) {
+            return !(s.contains("_") || s.contains("-"));
+          }
+        });
+    return Ordering.natural().sortedCopy(filtered);
   }
 
   private String getKeyForContents(final String filecontents)
