@@ -1,12 +1,12 @@
-/**
+/*
  * Copyright 2009 Google Inc.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
  * the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
@@ -18,13 +18,16 @@ package com.google.reducisaurus.servlets;
 import com.google.appengine.api.memcache.Expiration;
 import com.google.appengine.api.memcache.MemcacheService;
 import com.google.appengine.api.memcache.MemcacheServiceFactory;
-
 import org.apache.commons.fileupload.FileItemIterator;
 import org.apache.commons.fileupload.FileItemStream;
 import org.apache.commons.fileupload.FileUploadException;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
 import org.apache.commons.io.IOUtils;
 
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
@@ -35,12 +38,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.logging.Logger;
-
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 
 public abstract class BaseServlet extends HttpServlet {
   private static final String EXPIRE_URLS_PARAM = "expire_urls";
@@ -48,6 +47,10 @@ public abstract class BaseServlet extends HttpServlet {
   private static final int STATUS_CODE_ERROR = 400;
   private static final int DISABLE_URL_CACHE_VALUE = 0;
   private static final int DEFAULT_URL_CACHE_TIME_SECS = 300;
+  private static final String MAX_AGE_PARAM = "max-age";
+  private static final int DISABLE_MAX_AGE = 0;
+  private static final int DEFAULT_MAX_AGE_PARAM = 600;
+
   private final MemcacheService memcache =
       MemcacheServiceFactory.getMemcacheService();
   private static final Logger logger =
@@ -55,7 +58,8 @@ public abstract class BaseServlet extends HttpServlet {
 
   @Override
   protected void service(final HttpServletRequest req,
-      final HttpServletResponse resp) throws ServletException, IOException {
+                         final HttpServletResponse resp)
+      throws ServletException, IOException {
     String filecontents;
 
     if (ServletFileUpload.isMultipartContent(req)) {
@@ -76,14 +80,26 @@ public abstract class BaseServlet extends HttpServlet {
 
     Object cachedCopy;
     if ((cachedCopy = memcache.get(key)) != null) {
+      maybeSetHttpCacheHeaders(req, resp);
       render(resp, (String) cachedCopy);
     } else {
       StringReader reader = new StringReader(filecontents);
+      Response results = process(resp, reader);
+      if (results.isCacheable()) {
+        maybeSetHttpCacheHeaders(req, resp);
+        memcache.put(key, results.getBody());
+      }
+      render(resp, results.getBody());
+    }
+  }
 
-      final String results = process(resp, reader);
-      render(resp, results);
-
-      memcache.put(key, results);
+  private void maybeSetHttpCacheHeaders(HttpServletRequest req,
+                                        HttpServletResponse resp) {
+    long cachePolicy = getCachingPolicy(req, MAX_AGE_PARAM, DISABLE_MAX_AGE,
+        DEFAULT_MAX_AGE_PARAM);
+    if (cachePolicy != DISABLE_MAX_AGE) {
+      resp.setDateHeader("Expires", new Date().getTime() + cachePolicy * 1000);
+      resp.setHeader("Cache-Control", "max-age=" + cachePolicy);
     }
   }
 
@@ -127,7 +143,8 @@ public abstract class BaseServlet extends HttpServlet {
   }
 
   private void acquireFromRemoteUrl(final HttpServletRequest req,
-      StringBuilder concatenatedContents, final String url) throws IOException,
+                                    StringBuilder concatenatedContents,
+                                    final String url) throws IOException,
       ServletException {
     logger.severe("fetching url " + url);
     try {
@@ -147,22 +164,21 @@ public abstract class BaseServlet extends HttpServlet {
   }
 
   private void acquireFromParameterValue(StringBuilder concatenatedContents,
-      String value) {
+                                         String value) {
     concatenatedContents.append(value);
     concatenatedContents.append("\n");
   }
 
   private String[] getSortedParameterNames(HttpServletRequest req) {
     // We want a deterministic order so that dependencies can span input files.
-    // We
-    // don't trust the servlet container to return query parameters in any
-    // order,
-    // so we impose our own ordering. In this case, we use natural String
+    // We don't trust the servlet container to return query parameters in any
+    // order, so we impose our own ordering. In this case, we use natural String
     // ordering.
     ArrayList<String> list = Collections.list(req.getParameterNames());
     // Some parameter names are special.
     list.remove(EXPIRE_URLS_PARAM);
-    String[] arr = list.toArray(new String[] {});
+    list.remove(MAX_AGE_PARAM);
+    String[] arr = list.toArray(new String[]{});
     Arrays.sort(arr);
     return arr;
   }
@@ -180,22 +196,24 @@ public abstract class BaseServlet extends HttpServlet {
     return new String(hashValue);
   }
 
-  private int getUrlCachingPolicy(final HttpServletRequest req) {
-    int cache_policy = DEFAULT_URL_CACHE_TIME_SECS;
+  private int getCachingPolicy(final HttpServletRequest req, String paramName,
+                               int disabledValue,
+                               int defaultValue) {
+    int returnValue = defaultValue;
 
-    final String v = req.getParameter(EXPIRE_URLS_PARAM);
-    if (v != null) {
+    final String asString = req.getParameter(paramName);
+    if (asString != null) {
       try {
-        int seconds = Integer.parseInt(v);
+        int seconds = Integer.parseInt(asString);
         if (seconds >= 0) {
-          cache_policy = seconds;
+          returnValue = seconds;
         }
       } catch (NumberFormatException e) {
-        cache_policy = DISABLE_URL_CACHE_VALUE;
+        returnValue = disabledValue;
       }
     }
 
-    return cache_policy;
+    return returnValue;
   }
 
   private String fetchUrl(final String url) throws IOException {
@@ -204,18 +222,23 @@ public abstract class BaseServlet extends HttpServlet {
   }
 
   private void maybePutUrlInCache(final HttpServletRequest req,
-      final String url, final String contents) {
-    if (getUrlCachingPolicy(req) == DISABLE_URL_CACHE_VALUE) {
+                                  final String url, final String contents) {
+    int cacheForSecs = getCachingPolicy(req, EXPIRE_URLS_PARAM,
+        DISABLE_URL_CACHE_VALUE,
+        DEFAULT_URL_CACHE_TIME_SECS);
+
+    if (cacheForSecs == DISABLE_URL_CACHE_VALUE) {
       return;
     }
 
-    memcache.put(url, contents, Expiration
-        .byDeltaSeconds(getUrlCachingPolicy(req)));
+    memcache.put(url, contents, Expiration.byDeltaSeconds(cacheForSecs));
   }
 
   private String maybeFetchUrlFromCache(final HttpServletRequest req,
-      final String url) {
-    if (getUrlCachingPolicy(req) == DISABLE_URL_CACHE_VALUE) {
+                                        final String url) {
+    if (getCachingPolicy(req, EXPIRE_URLS_PARAM, DISABLE_URL_CACHE_VALUE,
+        DEFAULT_URL_CACHE_TIME_SECS) ==
+        DISABLE_URL_CACHE_VALUE) {
       return null;
     }
 
@@ -231,6 +254,6 @@ public abstract class BaseServlet extends HttpServlet {
   protected abstract void render(HttpServletResponse resp, String response)
       throws IOException;
 
-  protected abstract String process(HttpServletResponse resp,
-      StringReader reader) throws IOException;
+  protected abstract Response process(HttpServletResponse resp,
+                                      StringReader reader) throws IOException;
 }
