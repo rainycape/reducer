@@ -1,0 +1,7 @@
+Reducisaurus
+============
+
+Reducisaurus is a web service for minifying and serving CSS and JS files.
+Reducisaurus is based on YUI Compressor and runs on AppEngine.
+
+Project Homepage: http://code.google.com/p/reducisaurus

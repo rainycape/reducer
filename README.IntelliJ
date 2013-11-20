@@ -1,0 +1,58 @@
+How to Hack on Reducisaurus from IntelliJ
+=========================================
+
+Goal: To configure IntelliJ for hot-swap capable development on Reducisaurus,
+without the need to use command line tools for anything but deployment, and
+without the JetBrains AppEngine plugin.
+
+These instructions are based on IntelliJ 8.1.3 on Linux.
+
+Step-by-step instructions:
+
+- Get the source.  Check out the Reducisaurus sources to a new directory
+  ("reduci"): 
+  $ hg clo http://reducisaurus.googlecode.com/hg/
+- Create a new IntelliJ project with the previously created directory as the
+  root.  This will present you with a series of dialog boxes.  Choose the
+  following options:
+  * Create Java project from existing sources.
+  * Name: <your choice>
+  * Project files location: <path to your clone>
+  * Project storage format: .idea (directory based)
+  * Source file paths: (should show /tests and /src automatically)
+  * Libraries: should be two libraries found, both directories.  Rename
+    the library containing junit to "local", and the other to "warlib".  The
+    former contains libraries that are only needed when hacking (like jUnit),
+    and warlib contains the libraries you want to eventually deploy on AppEngine.
+    Later, we'll add the AppEngine SDK jars.
+  * Modules: should be one module with two dependencies (local and warlib).
+  * Facets: If you've enabled facets support in IntelliJ, you may confirm its
+    use.
+- Tweak language settings: In File -> Project Structure:
+  - In the left column, select "Project" under the "Project Settings" heading.
+    - Change "Project language level" to 6.0
+    - Change "References to resources outside of project file directory" to
+      "Relative"
+- Do an initial build: After clicking "Finish", right click on the "tests" source folder and click
+  "Run all tests".  The tests should complete successfully.  This will also
+  have created the out/ directory, which you need to symlink from
+  war/WEB-INF/lib so that the appserver can find the build results:
+  $ ln -s `pwd`/out/production/<project name>/ war/WEB-INF/lib/classes
+- Add the AppEngine SDK as a dependency: The local dev appserver requires
+  access to the AppEngine SDK jars, so add them to the project.  In File ->
+  Project Structure, select "Libraries" and then add a new library (named
+  "AppEngine") and then choose "Attach Jar Directories" and specify the location
+  of your local copy of the AppEngine SDK lib/ directory.
+- Back in the editor, press CTRL-N and find the LocalAppServer class.
+- Right-click on the LocalAppServer class name and click "Create ...main()".
+  Fill the options out as follows:
+  * VM Parameters: -javaagent:<path to appengine java SDK>/lib/agent/appengine-agent.jar
+  * Working Directory: <path to your clone>/war
+  * Display settings before launching: unchecked
+- After clicking "OK", click the debug/play button.  A few seconds later, a
+  message in the console should appear ("The server is running at
+  http://localhost:9090/").  In a browser, verify that the server works by
+  visiting:
+  http://localhost:9090/js?foo=function(x){+x(332)+} 
+- You can now hack on the code as usual.  IntelliJ will warn you when it is
+  dynamically hot swapping classes or when it can't.
