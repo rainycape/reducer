@@ -6,7 +6,7 @@ xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
 http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" version="2.5">	
 	<servlet>
     <servlet-name>Css</servlet-name>
-    <servlet-class>com.google.reducisaurus.servlets.CssServlet</servlet-class>
+    <servlet-class>com.rainycape.reducer.servlets.CssServlet</servlet-class>
   </servlet>	
   <servlet-mapping>
     <servlet-name>Css</servlet-name>
@@ -15,7 +15,7 @@ http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" version="2.5">
   
 	<servlet>
 		<servlet-name>Js</servlet-name>
-		<servlet-class>com.google.reducisaurus.servlets.JsServlet</servlet-class>
+		<servlet-class>com.rainycape.reducer.servlets.JsServlet</servlet-class>
 	</servlet>
 
 	<servlet-mapping>
