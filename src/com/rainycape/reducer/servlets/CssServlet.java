@@ -29,8 +29,8 @@ public class CssServlet extends BaseServlet {
 
   @Override
   protected final Response process(final HttpServletResponse resp,
-      final StringReader jssr) throws IOException {
-    CssCompressor css = new CssCompressor(jssr);
+      final StringReader csssr) throws IOException {
+    CssCompressor css = new CssCompressor(csssr);
     StringWriter sw = new StringWriter();
 
     resp.setContentType(MIME_TYPE_CSS);
