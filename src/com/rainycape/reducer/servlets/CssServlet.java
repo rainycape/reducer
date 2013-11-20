@@ -18,6 +18,7 @@ package com.rainycape.reducer.servlets;
 import com.yahoo.platform.yui.compressor.CssCompressor;
 
 import javax.servlet.http.HttpServletResponse;
+
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
@@ -27,15 +28,27 @@ public class CssServlet extends BaseServlet {
   private static final int WRAP_AT_COLUMN = 80;
   private static final String MIME_TYPE_CSS = "text/css; charset=utf-8";
 
+  protected String compile(final StringReader sr) throws IOException {
+
+    CssCompressor css = new CssCompressor(sr);
+    StringWriter sw = new StringWriter();
+    css.compress(sw, WRAP_AT_COLUMN);
+    return sw.toString();
+  }
+
   @Override
   protected final Response process(final HttpServletResponse resp,
       final StringReader csssr) throws IOException {
-    CssCompressor css = new CssCompressor(csssr);
-    StringWriter sw = new StringWriter();
 
-    resp.setContentType(MIME_TYPE_CSS);
-    css.compress(sw, WRAP_AT_COLUMN);
-    return Response.of(true, sw.toString());
+    try {
+      String css = compile(csssr);
+      resp.setContentType(MIME_TYPE_CSS);
+      return Response.of(true, css);
+    } catch (IOException e) {
+      resp.setStatus(404);
+      resp.setContentType("text/plain");
+      return Response.of(false, e.getMessage());
+    }
   }
 
   @Override

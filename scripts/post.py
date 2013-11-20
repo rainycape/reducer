@@ -22,6 +22,8 @@ def main(args):
             path = '/js'
         elif arg.endswith('.css'):
             path = '/css'
+        elif arg.endswith('.less'):
+            path = '/less'
         else:
             print ('Invalid file type ' + arg)
             continue
