@@ -23,6 +23,7 @@ import com.google.common.collect.Collections2;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
+
 import org.apache.commons.fileupload.FileItemIterator;
 import org.apache.commons.fileupload.FileItemStream;
 import org.apache.commons.fileupload.FileUploadException;
@@ -34,6 +35,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
@@ -47,6 +49,7 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.logging.Logger;
 
+@SuppressWarnings("serial")
 public abstract class BaseServlet extends HttpServlet {
   private static final String EXPIRE_URLS_PARAM = "expire_urls";
   private static final String CONTENT_TYPE_ERROR = "text/plain";
@@ -210,7 +213,8 @@ public abstract class BaseServlet extends HttpServlet {
     // We don't trust the servlet container to return query parameters in any
     // order, so we impose our own ordering. In this case, we use natural String
     // ordering.
-    List<String> list = Lists.newArrayList(Iterators.forEnumeration(
+    @SuppressWarnings("unchecked")
+	List<String> list = Lists.newArrayList(Iterators.forEnumeration(
         (Enumeration<String>) req.getParameterNames()));
     // Some parameter names should be ignored.
     Iterable<String> filtered = Collections2.filter(list,
