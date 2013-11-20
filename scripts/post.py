@@ -1,23 +1,41 @@
 #!/usr/bin/python
 
-import httplib
+try:
+	import httplib
+except ImportError:
+	import http.client as httplib
+
+try:
+	import urllib.parse as urllib
+except ImportError:
+	import urllib
+
 import sys
-import urllib
 import os
 
 def main(args):
-  server = os.environ.get("REDUCISAURUS", "localhost:8080")
 
-  params = urllib.urlencode({'file1': open(args.pop()).read()})
-  headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-  conn = httplib.HTTPConnection(server)
-  conn.request('POST', '/js', params, headers)
-  response = conn.getresponse()
-  print response.status, response.reason
-  data = response.read()
-  conn.close()
-  print data
-  print "\n"
+    server = os.environ.get("SERVER", "localhost:8888")
+
+    for arg in args:
+        if arg.endswith('.js'):
+            path = '/js'
+        elif arg.endswith('.css'):
+            path = '/css'
+        else:
+            print ('Invalid file type ' + arg)
+            continue
+
+        params = urllib.urlencode({'file1': open(arg).read()})
+        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+        conn = httplib.HTTPConnection(server)
+        conn.request('POST', path, params, headers)
+        response = conn.getresponse()
+        print (response.status, response.reason)
+        data = response.read()
+        conn.close()
+        print (data)
+        print ("\n")
 
 if __name__ == "__main__":
-  main(sys.argv)
+  main(sys.argv[1:])
